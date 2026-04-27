@@ -1,4 +1,12 @@
-﻿using System;
+﻿// ============================================================
+// FILE: frmProductList.cs
+// PURPOSE: Displays all products from tblProduct (joined with
+//          brand and category) in a searchable DataGridView.
+//          Supports Add, Edit, and Delete operations.
+//          Embedded inside frmDashboard's main panel.
+// ============================================================
+
+using System;
 using System.Windows.Forms;
 using System.Data.SqlClient;
 
@@ -6,17 +14,28 @@ namespace POS_and_Inventory_System
 {
     public partial class frmProductList : Form
     {
+        // ── ADO.NET objects ───────────────────────────────────
         SqlConnection conn = new SqlConnection();
         SqlCommand cmd = new SqlCommand();
         DBConnection dbconn = new DBConnection();
         SqlDataReader dr;
+
+        // ── Initialisation ────────────────────────────────────
+
         public frmProductList()
         {
             InitializeComponent();
             conn = new SqlConnection(dbconn.MyConnection());
-            LoadRecords();
+            LoadRecords();  // Populate grid with all products on open
         }
 
+        // ── Data loading ──────────────────────────────────────
+
+        /// <summary>
+        /// Loads products from tblProduct (joined to tblBrand and
+        /// tblCategory) filtered by the current search text.
+        /// Also called after any add/update/delete operation.
+        /// </summary>
         public void LoadRecords()
         {
             int i = 0;
@@ -36,17 +55,32 @@ namespace POS_and_Inventory_System
             conn.Close();
         }
 
+        // ── Search bar handlers ───────────────────────────────
+
+        /// <summary>Clears the search textbox.</summary>
         private void BtnClear_Click(object sender, EventArgs e) 
             => txtSearch.Clear();
 
+        /// <summary>
+        /// Re-runs LoadRecords each time the search text changes
+        /// to provide live/incremental filtering.
+        /// </summary>
         private void TxtSearch_TextChanged(object sender, EventArgs e) 
             => LoadRecords();
 
+        // ── Grid cell actions ─────────────────────────────────
+
+        /// <summary>
+        /// Handles Edit and Delete column button clicks:
+        ///   Edit   – opens frmProduct pre-filled with the selected row
+        ///   Delete – removes the product from tblProduct after confirmation
+        /// </summary>
         private void DgvProductList_CellContentClick(object sender, DataGridViewCellEventArgs e)
         {
             string colName = dgvProductList.Columns[e.ColumnIndex].Name;
             if (colName == "Edit")
             {
+                // Open frmProduct in update mode (Update enabled, Save disabled)
                 frmProduct frm = new frmProduct(this);
                 frm.btnSave.Enabled = false;
                 frm.btnUpdate.Enabled = true;
@@ -75,6 +109,12 @@ namespace POS_and_Inventory_System
             }
         }
 
+        // ── Button handlers ───────────────────────────────────
+
+        /// <summary>
+        /// Opens a blank frmProduct form in "add new" mode,
+        /// pre-loading the brand and category drop-downs.
+        /// </summary>
         private void BtnAdd_Click(object sender, EventArgs e)
         {
             frmProduct frm = new frmProduct(this);
@@ -85,6 +125,9 @@ namespace POS_and_Inventory_System
             frm.ShowDialog();
         }
 
+        /// <summary>
+        /// Closes this form using Util.CloseForm (resets canShow).
+        /// </summary>
         private void BtnClose_Click(object sender, EventArgs e)
             => Util.CloseForm(this);
     }

@@ -1,4 +1,12 @@
-﻿using System;
+﻿// ============================================================
+// FILE: frmVendorList.cs
+// PURPOSE: Displays all vendor (supplier) records from
+//          tblVendor in a DataGridView.  Supports Add, Edit,
+//          and Delete operations.  Embedded inside
+//          frmDashboard's main panel.
+// ============================================================
+
+using System;
 using System.Windows.Forms;
 using System.Data.SqlClient;
 
@@ -6,17 +14,27 @@ namespace POS_and_Inventory_System
 {
     public partial class frmVendorList : Form
     {
+        // ── ADO.NET objects ───────────────────────────────────
         SqlConnection conn;
         SqlCommand cmd;
         SqlDataReader dr;
         DBConnection dbconn = new DBConnection();
+
+        // ── Initialisation ────────────────────────────────────
+
         public frmVendorList()
         {
             InitializeComponent();
             conn = new SqlConnection(dbconn.MyConnection());
-            LoadRecords();
+            LoadRecords();  // Populate the grid on open
         }
 
+        // ── Data loading ──────────────────────────────────────
+
+        /// <summary>
+        /// Fetches all vendor records from tblVendor and fills
+        /// the DataGridView.  Called on load and after changes.
+        /// </summary>
         public void LoadRecords()
         {
             dgvVendor.Rows.Clear();
@@ -34,11 +52,19 @@ namespace POS_and_Inventory_System
             conn.Close();
         }
 
+        // ── Grid cell actions ─────────────────────────────────
+
+        /// <summary>
+        /// Handles Edit and Delete column button clicks:
+        ///   Edit   – opens frmVendor pre-filled with the selected vendor
+        ///   Delete – removes the vendor from tblVendor after confirmation
+        /// </summary>
         private void DgvVendor_CellContentClick(object sender, DataGridViewCellEventArgs e)
         {
             string colName = dgvVendor.Columns[e.ColumnIndex].Name;
             if (colName == "Edit")
             {
+                // Open frmVendor in update mode (Update enabled, Save disabled)
                 frmVendor frm = new frmVendor(this);
                 frm.lblId.Text = dgvVendor.Rows[e.RowIndex].Cells[1].Value.ToString();
                 frm.txtVendor.Text = dgvVendor.Rows[e.RowIndex].Cells[2].Value.ToString();
@@ -66,9 +92,17 @@ namespace POS_and_Inventory_System
             }
         }
 
+        // ── Button handlers ───────────────────────────────────
+
+        /// <summary>
+        /// Closes this form using Util.CloseForm (resets canShow).
+        /// </summary>
         private void BtnClose_Click(object sender, EventArgs e)
             => Util.CloseForm(this);
 
+        /// <summary>
+        /// Opens a blank frmVendor form in "add new" mode.
+        /// </summary>
         private void BtnAdd_Click(object sender, EventArgs e)
         {
             frmVendor frm = new frmVendor(this);
