@@ -1,18 +1,43 @@
-﻿using System;
+﻿// ============================================================
+// File: DBConnection.cs
+// Description: Central database helper class for the POS and Inventory System.
+//              Provides the shared SQL Server connection string and reusable
+//              data-access methods used by various forms and DAL classes
+//              throughout the application (daily sales totals, product counts,
+//              stock-on-hand totals, critical item counts, VAT rate, and
+//              user-password lookup).
+// ============================================================
+
+using System;
 using System.Data.SqlClient;
 
 namespace POS_and_Inventory_System
 {
     class DBConnection
     {
+        // -------------------------------------------------------
+        // Private Fields
+        // -------------------------------------------------------
+
         SqlConnection conn;
         SqlCommand cmd;
         SqlDataReader dr;
+
         private double dailySales;
         private int productLine;
         private int stockOnHand;
         private int critical;
+
         string connString;
+
+        // -------------------------------------------------------
+        // Connection Configuration
+        // -------------------------------------------------------
+
+        /// <summary>
+        /// Returns the SQL Server connection string used throughout the application.
+        /// Update this string to point to the correct server/database instance.
+        /// </summary>
         public string MyConnection()
         {
             //string conn = @"datasource = localhost; username = root; password = ; database = pos_inventory_db";
@@ -20,6 +45,14 @@ namespace POS_and_Inventory_System
             return connString;
         }
 
+        // -------------------------------------------------------
+        // Dashboard Summary Methods
+        // -------------------------------------------------------
+
+        /// <summary>
+        /// Returns the total sales amount (sum of cart totals) for today's date
+        /// where the cart status is 'Sold'.
+        /// </summary>
         public double DailySales()
         {
             string sdate = DateTime.Now.ToShortDateString();
@@ -33,6 +66,10 @@ namespace POS_and_Inventory_System
             return dailySales;
         }
 
+        /// <summary>
+        /// Returns the total number of distinct product records in tblProduct.
+        /// Used on the dashboard to display the current product-line count.
+        /// </summary>
         public int ProductLine()
         {
             conn = new SqlConnection(MyConnection());
@@ -43,6 +80,10 @@ namespace POS_and_Inventory_System
             return productLine;
         }
 
+        /// <summary>
+        /// Returns the total quantity of all products currently in stock
+        /// (sum of qty column in tblProduct).
+        /// </summary>
         public int StockOnHand()
         {
             conn = new SqlConnection(MyConnection());
@@ -53,6 +94,10 @@ namespace POS_and_Inventory_System
             return stockOnHand;
         }
 
+        /// <summary>
+        /// Returns the number of products that have fallen to or below their
+        /// reorder level, as identified by the vwCriticalItems view.
+        /// </summary>
         public int CriticalItems()
         {
             conn = new SqlConnection(MyConnection());
@@ -63,6 +108,14 @@ namespace POS_and_Inventory_System
             return critical;
         }
 
+        // -------------------------------------------------------
+        // VAT / Tax Helper
+        // -------------------------------------------------------
+
+        /// <summary>
+        /// Retrieves the VAT rate stored in tblVat.
+        /// Returns 0 if no VAT record is found.
+        /// </summary>
         public double GetVal()
         {
             double vat = 0;
@@ -81,6 +134,16 @@ namespace POS_and_Inventory_System
             return vat;
         }
 
+        // -------------------------------------------------------
+        // Authentication Helper
+        // -------------------------------------------------------
+
+        /// <summary>
+        /// Looks up and returns the stored password for the given username
+        /// from tblUser. Returns an empty string if the user is not found.
+        /// Used to verify credentials when changing a password.
+        /// </summary>
+        /// <param name="user">The username to look up.</param>
         public string GetPassword(string user)
         {
             string password = "";

@@ -1,4 +1,14 @@
-﻿using System;
+﻿// ============================================================
+// File: frmProduct.cs
+// Description: Add / Edit product form for the POS and Inventory System.
+//              Opened from frmProductList when the admin clicks "Add" or "Edit".
+//              Allows entry of product code, barcode, description, brand,
+//              category, selling price, and reorder level.
+//              Provides Save (insert) and Update operations; on success it
+//              refreshes the parent product list and clears the form fields.
+// ============================================================
+
+using System;
 using System.Windows.Forms;
 using System.Data.SqlClient;
 
@@ -6,11 +16,18 @@ namespace POS_and_Inventory_System
 {
     public partial class frmProduct : Form
     {
+        // -------------------------------------------------------
+        // Fields and Initialisation
+        // -------------------------------------------------------
+
         SqlConnection conn = new SqlConnection();
         SqlCommand cmd = new SqlCommand();
         DBConnection dbconn = new DBConnection();
         SqlDataReader dr;
+
+        // Reference to the parent list form so it can be refreshed after saves/updates.
         frmProductList fList;
+
         public frmProduct(frmProductList frm)
         {
             InitializeComponent();
@@ -18,6 +35,14 @@ namespace POS_and_Inventory_System
             fList = frm;
         }
 
+        // -------------------------------------------------------
+        // Dropdown Population
+        // -------------------------------------------------------
+
+        /// <summary>
+        /// Populates the Category combo box from tblCategory.
+        /// Called before the form is shown when adding a new product.
+        /// </summary>
         public void LoadCategory()
         {
             try
@@ -43,6 +68,10 @@ namespace POS_and_Inventory_System
             }
         }
 
+        /// <summary>
+        /// Populates the Brand combo box from tblBrand.
+        /// Called before the form is shown when adding a new product.
+        /// </summary>
         public void LoadBrand()
         {
             try
@@ -68,6 +97,15 @@ namespace POS_and_Inventory_System
             }
         }
 
+        // -------------------------------------------------------
+        // Save / Update / Cancel Handlers
+        // -------------------------------------------------------
+
+        /// <summary>
+        /// Inserts a new product record into tblProduct after resolving the
+        /// selected brand and category names to their respective IDs.
+        /// Refreshes the parent product list on success.
+        /// </summary>
         private void BtnSave_Click(object sender, EventArgs e)
         {
             try
@@ -76,6 +114,8 @@ namespace POS_and_Inventory_System
                     MessageBoxButtons.YesNo, MessageBoxIcon.Question) == DialogResult.Yes)
                 {
                     string bid = "", cid = "";
+
+                    // Resolve brand name to brand ID.
                     conn.Open();
                     string sql = "SELECT id FROM tblBrand WHERE brand LIKE '" + cboBrand.Text + "'";
                     cmd = new SqlCommand(sql, conn);
@@ -85,6 +125,7 @@ namespace POS_and_Inventory_System
                     dr.Close();
                     conn.Close();
 
+                    // Resolve category name to category ID.
                     conn.Open();
                     string sql1 = "SELECT id FROM tblCategory WHERE category LIKE '" + cboCategory.Text + "'";
                     cmd = new SqlCommand(sql1, conn);
@@ -94,6 +135,7 @@ namespace POS_and_Inventory_System
                     dr.Close();
                     conn.Close();
 
+                    // Insert the new product row.
                     conn.Open();
                     string sql2 = "INSERT INTO tblProduct (pcode, barcode, pdesc, bid, cid, price, reorder) " +
                         "VALUES (@pcode, @barcode, @pdesc, @bid, @cid, @price, @reorder)";
@@ -119,6 +161,7 @@ namespace POS_and_Inventory_System
             }
         }
 
+        /// <summary>Resets all input fields and re-enables the Save button / disables Update.</summary>
         public void Clear()
         {
             txtPrice.Clear();
@@ -133,6 +176,11 @@ namespace POS_and_Inventory_System
             btnUpdate.Enabled = false;
         }
 
+        /// <summary>
+        /// Updates an existing product record in tblProduct.
+        /// Resolves brand and category IDs the same way as BtnSave_Click.
+        /// Refreshes the parent list and closes this form on success.
+        /// </summary>
         private void BtnUpdate_Click(object sender, EventArgs e)
         {
             try
@@ -142,6 +190,8 @@ namespace POS_and_Inventory_System
                 {
                     string bid = "";
                     string cid = "";
+
+                    // Resolve brand name to brand ID.
                     conn.Open();
                     string sql = "SELECT id FROM tblBrand WHERE brand LIKE '" + cboBrand.Text + "'";
                     cmd = new SqlCommand(sql, conn);
@@ -151,6 +201,7 @@ namespace POS_and_Inventory_System
                     dr.Close();
                     conn.Close();
 
+                    // Resolve category name to category ID.
                     conn.Open();
                     string sql1 = "SELECT id FROM tblCategory WHERE category LIKE '" + cboCategory.Text + "'";
                     cmd = new SqlCommand(sql1, conn);
@@ -160,6 +211,7 @@ namespace POS_and_Inventory_System
                     dr.Close();
                     conn.Close();
 
+                    // Update the product row identified by product code.
                     conn.Open();
                     string sql2 = "UPDATE tblProduct SET barcode=@barcode, pdesc=@pdesc, bid=@bid, cid=@cid, " +
                         "price=@price, reorder=@reorder WHERE pcode LIKE @pcode";
@@ -186,11 +238,20 @@ namespace POS_and_Inventory_System
             }
         }
 
+        /// <summary>Clears the form fields without saving.</summary>
         private void BtnCancel_Click(object sender, EventArgs e)
         {
             Clear();
         }
 
+        // -------------------------------------------------------
+        // Input Validation
+        // -------------------------------------------------------
+
+        /// <summary>
+        /// Restricts the price text box to numeric digits, a decimal point
+        /// (only one allowed), and control characters (e.g., Backspace).
+        /// </summary>
         private void TxtPrice_KeyPress(object sender, KeyPressEventArgs e)
         {
             if (Char.IsDigit(e.KeyChar)) return;
@@ -200,6 +261,11 @@ namespace POS_and_Inventory_System
             e.Handled = true;
         }
 
+        // -------------------------------------------------------
+        // Close Handler
+        // -------------------------------------------------------
+
+        /// <summary>Closes and disposes this form without saving.</summary>
         private void BtnClose_Click(object sender, EventArgs e)
             => Dispose();
     }

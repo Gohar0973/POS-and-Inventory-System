@@ -1,4 +1,21 @@
-﻿using System;
+﻿// ============================================================
+// File: frmPOS.cs
+// Description: Point-of-Sale (cashier) form for the POS and Inventory System.
+//              Shown after a cashier successfully logs in.
+//              Allows the cashier to:
+//                - Start a new transaction (generates a transaction number)
+//                - Search products by barcode or manual look-up
+//                - Add, increase, or remove items in the cart
+//                - Apply per-item discounts
+//                - Settle the transaction (process payment, print receipt)
+//                - Clear the entire cart
+//                - View the daily sales history for this cashier
+//                - Receive a pop-up notification of critical-stock items on login
+//              Keyboard shortcuts: F1=New, F2=Search, F3=Discount,
+//              F4=Payment, F5=Clear, F6=Daily Sales, F8=Focus search, F10=Logout.
+// ============================================================
+
+using System;
 using System.Windows.Forms;
 using System.Data.SqlClient;
 using Tulpep.NotificationWindow;
@@ -7,23 +24,39 @@ namespace POS_and_Inventory_System
 {
     public partial class frmPOS : Form
     {
+        // -------------------------------------------------------
+        // Fields and Initialisation
+        // -------------------------------------------------------
+
         private SqlConnection conn;
         private SqlCommand cmd;
         private SqlDataReader dr;
         private DBConnection dbconn = new DBConnection();
 
+        // Tracks the stock-on-hand quantity and selected cart item details.
         int qty;
         string id;
         string price;
+
         public frmPOS()
         {
             InitializeComponent();
             lblDateNo.Text = DateTime.Now.ToLongDateString();
             conn = new SqlConnection(dbconn.MyConnection());
+            // Allow function-key shortcuts on the form.
             KeyPreview = true;
+            // Show critical-stock notification on form load.
             NotifyCriticalItems();
         }
 
+        // -------------------------------------------------------
+        // Critical-Items Notification
+        // -------------------------------------------------------
+
+        /// <summary>
+        /// Queries vwCriticalItems and shows a toast pop-up listing all products
+        /// that have reached their reorder level so the cashier is aware.
+        /// </summary>
         public void NotifyCriticalItems()
         {
             string critical = "";
@@ -51,6 +84,16 @@ namespace POS_and_Inventory_System
             popup.Popup();
         }
 
+        // -------------------------------------------------------
+        // Transaction Number Generation
+        // -------------------------------------------------------
+
+        /// <summary>
+        /// Generates and displays a unique transaction number for the current sale.
+        /// Format: yyyyMMdd + 4-digit sequence (e.g. 202404011001).
+        /// Increments from the last transaction number of the same date;
+        /// starts at 1001 if this is the first transaction of the day.
+        /// </summary>
         public void GetTransNo()
         {
             try
@@ -59,6 +102,7 @@ namespace POS_and_Inventory_System
                 string transNo;
                 int count;
                 conn.Open();
+                // Find the most recent transaction for today to determine the next sequence.
                 string sql = "SELECT top 1 transno FROM tblCart where transno like '" + sdate + "%' order by id";
                 cmd = new SqlCommand(sql, conn);
                 dr = cmd.ExecuteReader();
@@ -71,6 +115,7 @@ namespace POS_and_Inventory_System
                 }
                 else
                 {
+                    // First transaction of the day; start at 1001.
                     transNo = sdate + "1001";
                     lblTransNo.Text = transNo;
                 }
@@ -86,6 +131,11 @@ namespace POS_and_Inventory_System
             }
         }
 
+        // -------------------------------------------------------
+        // Timer Tick – Live Clock / Date Display
+        // -------------------------------------------------------
+
+        /// <summary>Updates the clock and date labels every second via the form's timer.</summary>
         private void Timer1_Tick(object sender, EventArgs e)
         {
 
@@ -93,6 +143,15 @@ namespace POS_and_Inventory_System
             lblDate.Text = DateTime.Now.ToLongDateString();
         }
 
+        // -------------------------------------------------------
+        // Barcode Search / Product Lookup
+        // -------------------------------------------------------
+
+        /// <summary>
+        /// Fires on every keystroke in the barcode text box.
+        /// When a complete barcode match is found in tblProduct, the item is
+        /// automatically added to the cart using the current quantity.
+        /// </summary>
         private void TxtSearch_TextChanged(object sender, EventArgs e)
         {
             try
@@ -110,7 +169,7 @@ namespace POS_and_Inventory_System
                     dr.Read();
                     if (dr.HasRows)
                     {
-
+                        // Capture stock-on-hand before adding to cart for validation.
                         qty = int.Parse(dr["qty"].ToString());
                         _pcode = dr["pcode"].ToString();
                         _price = double.Parse(dr["price"].ToString());
@@ -139,11 +198,25 @@ namespace POS_and_Inventory_System
             }
         }
 
+        // -------------------------------------------------------
+        // Cart Management – Add / Update Items
+        // -------------------------------------------------------
+
+        /// <summary>
+        /// Adds a product to the cart (tblCart) or increases its quantity if it
+        /// already exists in the current transaction.
+        /// Validates that the requested quantity does not exceed stock on hand.
+        /// </summary>
+        /// <param name="_pcode">Product code to add.</param>
+        /// <param name="_price">Unit selling price of the product.</param>
+        /// <param name="_qty">Quantity to add to the cart.</param>
         private void AddToCart(string _pcode, double _price, int _qty)
         {
             string id = "";
             bool found = false;
             int cartQty = 0;
+
+            // Check whether this product is already in the current transaction's cart.
             conn.Open();
             string sql = "SELECT * FROM tblCart WHERE transno=@transno AND pcode=@pcode";
             cmd = new SqlCommand(sql, conn);
@@ -163,6 +236,7 @@ namespace POS_and_Inventory_System
 
             if (found)
             {
+                // Product already in cart – update the quantity.
                 if (qty < (int.Parse(txtQty.Text) + cartQty))
                 {
                     MessageBox.Show("Unable to proceed. Remaining qty on hand is " + qty, "Warning", MessageBoxButtons.OK, MessageBoxIcon.Warning);
@@ -182,6 +256,7 @@ namespace POS_and_Inventory_System
             }
             else
             {
+                // New product for this transaction – insert a new cart row.
                 if (qty < int.Parse(txtQty.Text))
                 {
                     MessageBox.Show("Unable to proceed. Remaining qty on hand is " + qty, "Warning", MessageBoxButtons.OK, MessageBoxIcon.Warning);
@@ -208,6 +283,16 @@ namespace POS_and_Inventory_System
             }
         }
 
+        // -------------------------------------------------------
+        // Cart Display
+        // -------------------------------------------------------
+
+        /// <summary>
+        /// Refreshes the cart DataGridView with all pending items for the
+        /// current transaction, recalculates the totals and discounts, and
+        /// enables/disables the payment, discount, and clear buttons based
+        /// on whether any items are in the cart.
+        /// </summary>
         public void LoadCart()
         {
             try
@@ -232,9 +317,12 @@ namespace POS_and_Inventory_System
                 }
                 dr.Close();
                 conn.Close();
+
                 lblSalesTotal.Text = total.ToString("#,##0.00");
                 lblDiscount.Text = discount.ToString("#,##0.00");
                 GetCartTotal();
+
+                // Enable action buttons only when there is at least one item.
                 btnSetPayment.Enabled = hasRecord;
                 btnAddDiscount.Enabled = hasRecord;
                 btnClearCart.Enabled = hasRecord;
@@ -246,7 +334,18 @@ namespace POS_and_Inventory_System
             }
         }
 
+        // -------------------------------------------------------
+        // Cart DataGridView – Row Action Buttons (Delete / +Qty / -Qty)
+        // -------------------------------------------------------
 
+        /// <summary>
+        /// Handles clicks on the custom action columns in the cart grid:
+        ///   Delete  – removes the row from tblCart.
+        ///   colAdd  – increments the row's quantity by the current txtQty value
+        ///             (if stock is available).
+        ///   colRemove – decrements the row's quantity by txtQty
+        ///               (minimum of 1 remaining in cart).
+        /// </summary>
         private void DgvBrandList_CellContentClick(object sender, DataGridViewCellEventArgs e)
         {
             string colName = dgvBrandList.Columns[e.ColumnIndex].Name;
@@ -265,6 +364,7 @@ namespace POS_and_Inventory_System
             }
             else if (colName == "colAdd")
             {
+                // Verify remaining stock before incrementing.
                 int i = 0;
                 conn.Open();
                 string sql = "SELECT sum(qty) AS qty FROM tblProduct WHERE pcode LIKE '" + 
@@ -291,6 +391,7 @@ namespace POS_and_Inventory_System
             }
             else if (colName == "colRemove")
             {
+                // Only allow removal if the current cart quantity is greater than 1.
                 int i = 0;
                 conn.Open();
                 string sql = "SELECT sum(qty) AS qty FROM tblCart WHERE pcode LIKE '" + dgvBrandList.Rows[e.RowIndex].Cells[2].Value.ToString() + 
@@ -318,6 +419,14 @@ namespace POS_and_Inventory_System
             }
         }
 
+        // -------------------------------------------------------
+        // Totals Calculation
+        // -------------------------------------------------------
+
+        /// <summary>
+        /// Calculates VAT, vatable amount, and grand total from the current
+        /// cart subtotal and updates the corresponding summary labels.
+        /// </summary>
         public void GetCartTotal()
         {
             double discount = double.Parse(lblDiscount.Text);
@@ -330,6 +439,14 @@ namespace POS_and_Inventory_System
             lblDisplayTotal.Text = sales.ToString("#,##0.00");
         }
 
+        // -------------------------------------------------------
+        // Cart Row Selection Handler
+        // -------------------------------------------------------
+
+        /// <summary>
+        /// Captures the cart row ID and unit price whenever the selection
+        /// changes, so they are available for the discount dialog.
+        /// </summary>
         private void DgvBrandList_SelectionChanged(object sender, EventArgs e)
         {
             int i = dgvBrandList.CurrentRow.Index;
@@ -337,6 +454,16 @@ namespace POS_and_Inventory_System
             price = dgvBrandList[4, i].Value.ToString();
         }
 
+        // -------------------------------------------------------
+        // Keyboard Shortcut Handler
+        // -------------------------------------------------------
+
+        /// <summary>
+        /// Maps function keys to POS actions:
+        /// F1=New transaction, F2=Product search, F3=Discount,
+        /// F4=Payment, F5=Clear cart, F6=Daily sales,
+        /// F8=Focus barcode field, F10=Logout.
+        /// </summary>
         private void FrmPOS_KeyDown(object sender, KeyEventArgs e)
         {
             if (e.KeyCode == Keys.F1)
@@ -353,6 +480,7 @@ namespace POS_and_Inventory_System
                 BtnDailySales_Click(sender, e);
             else if (e.KeyCode == Keys.F8)
             {
+                // Select all text in the search box so scanning replaces it immediately.
                 txtSearch.SelectionStart = 0;
                 txtSearch.SelectionLength = txtSearch.Text.Length;
             }
@@ -360,6 +488,11 @@ namespace POS_and_Inventory_System
                 BtnClose_Click(sender, e);
         }
 
+        // -------------------------------------------------------
+        // Action Button Handlers
+        // -------------------------------------------------------
+
+        /// <summary>Opens the product look-up dialog so the cashier can search by name.</summary>
         private void BtnSearchProd_Click(object sender, EventArgs e)
         {
             if (lblTransNo.Text == "0000000000000") return;
@@ -368,6 +501,7 @@ namespace POS_and_Inventory_System
             lookUpFrm.ShowDialog();
         }
 
+        /// <summary>Opens the discount dialog for the currently selected cart item.</summary>
         private void BtnAddDiscount_Click(object sender, EventArgs e)
         {
             frmDiscount discountFrm = new frmDiscount(this);
@@ -376,6 +510,7 @@ namespace POS_and_Inventory_System
             discountFrm.ShowDialog();
         }
 
+        /// <summary>Opens the payment settlement dialog with the current total pre-filled.</summary>
         private void BtnSetPayment_Click(object sender, EventArgs e)
         {
             frmSettle setFrm = new frmSettle(this);
@@ -383,6 +518,10 @@ namespace POS_and_Inventory_System
             setFrm.ShowDialog();
         }
 
+        /// <summary>
+        /// Asks for confirmation and then deletes all pending cart rows for
+        /// the current transaction, effectively voiding the sale.
+        /// </summary>
         private void BtnClearCart_Click(object sender, EventArgs e)
         {
             if (MessageBox.Show("Remove all items from cart?", "Confirm", MessageBoxButtons.YesNo, MessageBoxIcon.Question) == DialogResult.Yes)
@@ -396,6 +535,7 @@ namespace POS_and_Inventory_System
             }
         }
 
+        /// <summary>Opens the Daily Sales / sold-items dialog filtered to this cashier.</summary>
         private void BtnDailySales_Click(object sender, EventArgs e)
         {
             frmSoldItems soldFrm = new frmSoldItems();
@@ -407,6 +547,10 @@ namespace POS_and_Inventory_System
             soldFrm.ShowDialog();
         }
 
+        /// <summary>
+        /// Prevents logout if there are unsettled items in the cart.
+        /// On confirmation, hides the POS form and reopens the login form.
+        /// </summary>
         private void BtnClose_Click(object sender, EventArgs e)
         {
             if (dgvBrandList.Rows.Count > 0)
@@ -423,6 +567,10 @@ namespace POS_and_Inventory_System
             }
         }
 
+        /// <summary>
+        /// Starts a new sale transaction: generates a new transaction number and
+        /// enables the barcode search box. Does nothing if the cart is not empty.
+        /// </summary>
         private void BtnNew_Click(object sender, EventArgs e)
         {
             if (dgvBrandList.Rows.Count > 0) return;
